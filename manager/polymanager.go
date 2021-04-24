@@ -633,7 +633,7 @@ func (this *EthSender) waitTransactionConfirm(polyTxHash string, hash ethcommon.
 			}
 			result := receipt.Status == types.ReceiptStatusSuccessful
 			if !result {
-				log.Infof("( eth_transaction %s, poly_tx %s ) receipt.Status: %d", hash.String(), polyTxHash, receipt.Status)
+				log.Infof("( eth_transaction %s, poly_tx %s block %v ) receipt.Status: %d", hash.String(), polyTxHash, receipt.BlockNumber, receipt.Status)
 			}
 			return result
 		}
