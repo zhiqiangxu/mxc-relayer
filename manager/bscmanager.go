@@ -425,7 +425,7 @@ func (this *MSCManager) handleLockDepositEvents(refHeight uint64) error {
 		return fmt.Errorf("handleLockDepositEvents - this.db.GetAllRetry error: %s", err)
 	}
 	for _, v := range retryList {
-		time.Sleep(time.Second * 1)
+		// time.Sleep(time.Second * 1)
 		crosstx := new(CrossTransfer)
 		err := crosstx.Deserialization(common.NewZeroCopySource(v))
 		if err != nil {
