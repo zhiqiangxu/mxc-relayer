@@ -100,9 +100,23 @@ func NewPolyManager(servCfg *config.ServiceConfig, startblockHeight uint32, poly
 		return nil, err
 	}
 
+	mgr := &PolyManager{
+		exitChan:     make(chan int),
+		config:       servCfg,
+		polySdk:      polySdk,
+		bridgeSdk:    bridgeSdk,
+		syncedHeight: startblockHeight,
+		contractAbi:  &contractabi,
+		db:           boltDB,
+		ethClient:    ethereumsdk,
+		senders:      nil,
+	}
+
+	mgr.init()
+
 	senders := make([]*EthSender, len(accArr))
 	for i, v := range senders {
-		v = &EthSender{}
+		v = &EthSender{mgr: mgr}
 		v.acc = accArr[i]
 
 		v.ethClient = ethereumsdk
@@ -115,29 +129,40 @@ func NewPolyManager(servCfg *config.ServiceConfig, startblockHeight uint32, poly
 
 		senders[i] = v
 	}
-	return &PolyManager{
-		exitChan:     make(chan int),
-		config:       servCfg,
-		polySdk:      polySdk,
-		bridgeSdk:    bridgeSdk,
-		syncedHeight: startblockHeight,
-		contractAbi:  &contractabi,
-		db:           boltDB,
-		ethClient:    ethereumsdk,
-		senders:      senders,
-	}, nil
+
+	mgr.senders = senders
+
+	return mgr, nil
 }
 
-func (this *PolyManager) findLatestHeight() uint32 {
-	if this.eccdInstance == nil {
+func (this *PolyManager) init() {
+	for {
 		address := ethcommon.HexToAddress(this.config.MSCConfig.ECCDContractAddress)
 		instance, err := eccd_abi.NewEthCrossChainData(address, this.ethClient)
 		if err != nil {
 			log.Errorf("findLatestHeight - new eth cross chain failed: %s", err.Error())
-			return 0
+			continue
 		}
 		this.eccdInstance = instance
+
+		if this.syncedHeight > 0 {
+			log.Infof("PolyManager init - start height from flag: %d", this.syncedHeight)
+			break
+		}
+		this.syncedHeight = this.db.GetPolyHeight()
+		latestHeight := this.findLatestHeight()
+		if latestHeight > this.syncedHeight {
+			this.syncedHeight = latestHeight
+			log.Infof("PolyManager init - synced height from ECCM: %d", this.syncedHeight)
+			break
+		}
+		log.Infof("PolyManager init - synced height from DB: %d", this.syncedHeight)
+
+		break
 	}
+
+}
+func (this *PolyManager) findLatestHeight() uint32 {
 
 	instance := this.eccdInstance
 
@@ -149,28 +174,7 @@ func (this *PolyManager) findLatestHeight() uint32 {
 	return uint32(height)
 }
 
-func (this *PolyManager) init() bool {
-	if this.syncedHeight > 0 {
-		log.Infof("PolyManager init - start height from flag: %d", this.syncedHeight)
-		return true
-	}
-	this.syncedHeight = this.db.GetPolyHeight()
-	latestHeight := this.findLatestHeight()
-	if latestHeight > this.syncedHeight {
-		this.syncedHeight = latestHeight
-		log.Infof("PolyManager init - synced height from ECCM: %d", this.syncedHeight)
-		return true
-	}
-	log.Infof("PolyManager init - synced height from DB: %d", this.syncedHeight)
-
-	return true
-}
-
 func (this *PolyManager) MonitorChain() {
-	ret := this.init()
-	if ret == false {
-		log.Errorf("PolyManager MonitorChain - init failed\n")
-	}
 	monitorTicker := time.NewTicker(config.ONT_MONITOR_INTERVAL)
 	var blockHandleResult bool
 	for {
@@ -216,11 +220,7 @@ func (this *PolyManager) IsEpoch(hdr *polytypes.Header) (bool, []byte, error) {
 		return false, nil, nil
 	}
 
-	eccdAddr := ethcommon.HexToAddress(this.config.MSCConfig.ECCDContractAddress)
-	eccd, err := eccd_abi.NewEthCrossChainData(eccdAddr, this.ethClient)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to new eccm: %v", err)
-	}
+	eccd := this.eccdInstance
 	rawKeepers, err := eccd.GetCurEpochConPubKeyBytes(nil)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get current epoch keepers: %v", err)
@@ -418,6 +418,7 @@ func (this *PolyManager) Stop() {
 
 type EthSender struct {
 	acc          accounts.Account
+	mgr          *PolyManager
 	keyStore     *tools.EthKeyStore
 	cmap         map[string]chan *EthTxInfo
 	nonceManager *tools.NonceManager
@@ -474,11 +475,7 @@ func (this *EthSender) commitDepositEventsWithHeader(header *polytypes.Header, p
 		}
 	}
 
-	eccdAddr := ethcommon.HexToAddress(this.config.MSCConfig.ECCDContractAddress)
-	eccd, err := eccd_abi.NewEthCrossChainData(eccdAddr, this.ethClient)
-	if err != nil {
-		panic(fmt.Errorf("failed to new eccm: %v", err))
-	}
+	eccd := this.mgr.eccdInstance
 	fromTx := [32]byte{}
 	copy(fromTx[:], param.TxHash[:32])
 	res, _ := eccd.CheckIfFromChainTxExist(nil, param.FromChainID, fromTx)
