@@ -441,16 +441,19 @@ func (this *EthSender) sendTxToEth(info *EthTxInfo) error {
 		this.nonceManager.ReturnNonce(this.acc.Address, nonce)
 		return fmt.Errorf("commitDepositEventsWithHeader - send transaction error and return nonce %d: %v", nonce, err)
 	}
-	// hash := signedtx.Hash()
+	hash := signedtx.Hash()
 
-	// isSuccess := this.waitTransactionConfirm(info.polyTxHash, hash)
-	// if isSuccess {
-	// 	log.Infof("successful to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s)",
-	// 		hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String())
-	// } else {
-	// 	log.Errorf("failed to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s)",
-	// 		hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String())
-	// }
+	go func() {
+		isSuccess := this.waitTransactionConfirm(info.polyTxHash, hash)
+		if isSuccess {
+			log.Infof("successful to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s)",
+				hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String())
+		} else {
+			log.Errorf("failed to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s)",
+				hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String())
+		}
+	}()
+
 	return nil
 }
 
