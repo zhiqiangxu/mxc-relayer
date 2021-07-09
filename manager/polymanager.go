@@ -429,6 +429,7 @@ type EthSender struct {
 }
 
 func (this *EthSender) sendTxToEth(info *EthTxInfo) error {
+	start := time.Now()
 	nonce := this.nonceManager.GetAddressNonce(this.acc.Address)
 	tx := types.NewTransaction(nonce, info.contractAddr, big.NewInt(0), info.gasLimit, info.gasPrice, info.txData)
 	signedtx, err := this.keyStore.SignTransaction(tx, this.acc)
@@ -446,8 +447,8 @@ func (this *EthSender) sendTxToEth(info *EthTxInfo) error {
 	go func() {
 		isSuccess := this.waitTransactionConfirm(info.polyTxHash, hash)
 		if isSuccess {
-			log.Infof("successful to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s)",
-				hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String())
+			log.Infof("successful to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s, took:%s)",
+				hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String(), time.Now().Sub(start).String())
 		} else {
 			log.Errorf("failed to relay tx to msc: (eth_hash: %s, nonce: %d, poly_hash: %s, eth_explorer: %s)",
 				hash.String(), nonce, info.polyTxHash, tools.GetExplorerUrl(this.keyStore.GetChainId())+hash.String())
