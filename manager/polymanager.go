@@ -336,6 +336,11 @@ func (this *PolyManager) handleDepositEvents(height uint32) bool {
 					log.Errorf("handleDepositEvents - failed to deserialize MakeTxParam (value: %x, err: %v)", value, err)
 					continue
 				}
+
+				if !this.config.IsWhitelistMethod(param.MakeTxParam.Method) {
+					log.Infof("method %s forbiden, txhash %s", param.MakeTxParam.Method, event.TxHash)
+					continue
+				}
 				if !this.isPaid(param) {
 					log.Infof("%v skipped because not paid", event.TxHash)
 					continue

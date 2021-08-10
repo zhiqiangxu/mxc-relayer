@@ -313,6 +313,11 @@ func (this *MSCManager) fetchLockDepositEvents(height uint64, client *ethclient.
 		}
 		param := &common2.MakeTxParam{}
 		_ = param.Deserialization(common.NewZeroCopySource([]byte(evt.Rawdata)))
+
+		if !this.config.IsWhitelistMethod(param.Method) {
+			log.Infof("method %s forbiden, txhash %s", param.Method, evt.Raw.TxHash.Hex())
+			continue
+		}
 		raw, _ := this.polySdk.GetStorage(autils.CrossChainManagerContractAddress.ToHexString(),
 			append(append([]byte(cross_chain_manager.DONE_TX), autils.GetUint64Bytes(this.config.MSCConfig.SideChainId)...), param.CrossChainID...))
 		if len(raw) != 0 {

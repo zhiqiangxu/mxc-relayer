@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -49,13 +50,27 @@ const (
 //}
 
 type ServiceConfig struct {
-	PolyConfig      *PolyConfig
-	MSCConfig       *MSCConfig
-	BridgeConfig    *BridgeConfig
-	BoltDbPath      string
-	RoutineNum      int64
-	TargetContracts []map[string]map[string][]uint64
-	Free bool
+	sync.Once
+	PolyConfig       *PolyConfig
+	MSCConfig        *MSCConfig
+	BridgeConfig     *BridgeConfig
+	BoltDbPath       string
+	RoutineNum       int64
+	TargetContracts  []map[string]map[string][]uint64
+	Free             bool
+	WhitelistMethods []string
+	whitelistMethods map[string]bool
+}
+
+func (c *ServiceConfig) IsWhitelistMethod(method string) bool {
+	c.Do(func() {
+		c.whitelistMethods = map[string]bool{}
+		for _, m := range c.WhitelistMethods {
+			c.whitelistMethods[m] = true
+		}
+	})
+
+	return c.whitelistMethods[method]
 }
 
 type BridgeConfig struct {
